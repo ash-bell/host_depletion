@@ -1,0 +1,92 @@
+---
+title: "host.depletion.experiment"
+author: "Ashley Bell"
+date: "`r Sys.Date()`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, echo = FALSE}
+#only affects subsequent chunks
+knitr::opts_knit$set(root.dir = '/Users/agb214/OneDrive - University of Exeter/PhD/Host depletion')
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r libraries}
+library(tidyverse)
+library(ggpubr)
+library(ggsignif)
+library(car)
+library(FSA)
+library(RColorBrewer)
+
+options(scipen=999)
+`%!in%` = Negate(`%in%`)
+```
+
+
+## Project summary
+Some introduction here
+
+```{r data}
+(data <- read_csv("data/host.depletion.data.clean.csv", show_col_types = FALSE) %>%
+  mutate(Treatment.group = factor(Treatment.group, levels = c("Standard DNA extraction", "CpG-methylated", "Hypotonic Lysis", "Molysis", "PBS", "Zymo", "Positive Control", "Negative Control", "NTC"), ordered = TRUE)))
+
+TG.clrs <- brewer.pal(n = 9, name = "Set1")
+names(TG.clrs) <- levels(data$Treatment.group)
+```
+
+## What are the DNA extraction metric
+
+```{r DNA extraction}
+data %>%
+  group_by(Treatment.group) %>%
+  summarise(Median.DNA.conc = median(DNA.concentration.ng.ul, na.rm = T),
+            DNA.5.perc.quantile = quantile(DNA.concentration.ng.ul, 0.05, na.rm = T),
+            DNA.95.perc.quantile = quantile(DNA.concentration.ng.ul, 0.95, na.rm = T),
+            Median.260.280.ratio = median(`260.280.ratio`, na.rm = T),
+            Median.260.230.ratio = median(`260.230.ratio`, na.rm = T)) %>%
+  knitr::kable()
+```
+
+## Ratio 16S to 18S
+```{r ratios}
+data <- data %>%
+  mutate(`18S.to.16S.ratio` = `18S.Cq.1` / `16S.Cq.1`)
+
+# Normal distribution? No
+shapiro.test(data$`18S.to.16S.ratio`)
+
+# Equal variance? Yes
+leveneTest(`18S.to.16S.ratio` ~ Treatment.group, data = data)
+
+## Kruskal-Wallis # sig diff overall
+kruskal.test(`18S.to.16S.ratio` ~ Treatment.group, data = data)
+
+#DUNNS post-hoc test with BH correction
+dunnTest(data$`18S.to.16S.ratio`,  data$Treatment.group, method="bh")$res %>%
+  filter(P.adj < 0.05)
+
+(ratio.p <- data %>%
+    filter(Treatment.group %!in% c("Negative Control", "NTC", "Positive Control")) %>%
+  ggplot(aes(x = Treatment.group, y = `18S.to.16S.ratio`, fill = Treatment.group)) +
+  geom_boxplot() +
+    geom_dotplot(binaxis='y', stackdir='center', 
+                 dotsize = 0.4, fill = "black") +
+  geom_signif(comparisons = list(c("Standard DNA extraction", "CpG-methylated"),
+                                 c("Standard DNA extraction", "Hypotonic Lysis"),
+                                 c("Standard DNA extraction", "Molysis"),
+                                 c("Standard DNA extraction", "PBS"),
+                                 c("Standard DNA extraction", "Zymo")), 
+              y_position = c(1.3, 1.4, 1.5, 1.6, 1.7), 
+              annotations = c("***", "*", "***", "N.S.", "*")) +
+  scale_fill_manual(values = TG.clrs) +
+  theme_bw() +
+  ylab("Ratio of 18S to 16S rRNA Cq") +
+  xlab("Treatment Group") +
+  theme(legend.position = "none")
+)
+```
+
+

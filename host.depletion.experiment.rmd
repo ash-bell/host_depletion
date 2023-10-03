@@ -11,6 +11,7 @@ editor_options:
 #only affects subsequent chunks
 knitr::opts_knit$set(root.dir = '/Users/agb214/OneDrive - University of Exeter/PhD/Host depletion')
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+setwd("/Users/agb214/OneDrive - University of Exeter/PhD/Host depletion")
 ```
 
 ```{r libraries}
